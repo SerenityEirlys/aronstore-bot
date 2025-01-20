@@ -22,7 +22,8 @@ module.exports = {
     .addStringOption(option =>
       option.setName('reason')
         .setDescription('Reason for the vouch')
-        .setRequired(true)),
+        .setRequired(true))
+    .setDefaultMemberPermissions(null), // Allow anyone to use this command
 
   async execute(interaction) {
     const targetUser = interaction.options.getUser('target');

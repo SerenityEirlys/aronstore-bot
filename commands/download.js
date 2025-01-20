@@ -7,22 +7,22 @@ module.exports = {
 
     async execute(interaction) {
         const games = [
-            { label: 'Genshin Impacts', value: 'gs' },
-            { label: 'Honkai StarRail', value: 'hsr' },
-            { label: 'Zenless Zen Zero', value: 'zzz' },
-            { label: 'Marvel Rivals', value: 'mrs' },
-            { label: 'Wuthering Wave', value: 'ww' },
-            { label: 'Valorant', value: 'valorant' },
-            { label: 'Counter Strike 2', value: 'cs2' },
-            { label: 'DeadLock', value: 'deadlock' },
+            { label: 'Genshin Impacts', value: 'gs', emoji: '<:Gi:1327875368971014156>' },
+            { label: 'Honkai StarRail', value: 'hsr', emoji: '<:hsr:1327873865635987469>' },
+            { label: 'Zenless Zen Zero', value: 'zzz', emoji: '<:zzz:1327873879527526410>' },
+            { label: 'Marvel Rivals', value: 'mrs', emoji: '<:mr:1327873867498258492>' },
+            { label: 'Wuthering Wave', value: 'ww', emoji: '🌊' },
+            { label: 'Valorant', value: 'valorant', emoji: '<:val:1327873872002940929>' },
+            { label: 'Counter Strike 2', value: 'cs2', emoji: '<:cs2:1327873881498849392>' },
+            { label: 'DeadLock', value: 'deadlock', emoji: '<:deadlock:1327873888809390151>' },
         ];
 
         const loadersByGame = {
             'gs': [{ label: 'Akebi', value: 'akebi' }, { label: 'UniCore', value: 'unicore' }],
-            'hsr': [{ label: 'Unistar', value: 'Unistar' }, { label: 'Loader', value: 'Loader' }],
-            'zzz': [{ label: 'Unizone', value: 'Unizone' }, { label: 'Loader', value: 'Loader' }],
-            'mrs': [{ label: 'Unirivals', value: 'Unirivals' }, { label: 'Loader', value: 'Loader' }],
-            'ww': [{ label: 'Uniwaves', value: 'Uniwaves' }, { label: 'meowaves', value: 'meowaves' }],
+            'hsr': [{ label: 'Unistar', value: 'unistar' }, { label: 'Loader', value: 'Loader' }],
+            'zzz': [{ label: 'Unizone', value: 'unizone' }, { label: 'Loader', value: 'Loader' }],
+            'mrs': [{ label: 'Unirivals', value: 'unirivals' }, { label: 'Loader', value: 'Loader' }],
+            'ww': [{ label: 'Uniwaves', value: 'uniwaves' }, { label: 'meowaves', value: 'meowaves' }],
             'valorant': [{ label: 'NeoExclusive', value: 'neoexclusive' }, { label: 'NeoxAim', value: 'neoxaim' }],
             'cs2': [{ label: 'Predator', value: 'cs2' }, { label: 'Loader1', value: 'loader1' }],
             'deadlock': [{ label: 'Predator', value: 'deadlock' }, { label: 'Loader1', value: 'loader1' }],
@@ -31,14 +31,25 @@ module.exports = {
         const gameMenu = new StringSelectMenuBuilder()
             .setCustomId('select_game')
             .setPlaceholder('Select a game')
-            .addOptions(games);
+            .addOptions(games.map(game => ({
+                label: game.label,
+                value: game.value,
+                emoji: game.emoji
+            })));
 
         const gameRow = new ActionRowBuilder().addComponents(gameMenu);
 
+        const initialEmbed = new EmbedBuilder()
+            .setTitle('🎮 Game Selection')
+            .setDescription('Please select a game from the dropdown menu below')
+            .setColor('#FF69B4')
+            .setThumbnail('https://cdn.discordapp.com/attachments/1318252966515576943/1330188986160775240/bucac.gif')
+            .setFooter({ text: '🎨 Developer: Hitori | Design: Arons' });
+
         await interaction.reply({
-            content: 'Please select a game:',
+            embeds: [initialEmbed],
             components: [gameRow],
-            ephemeral: true,
+            flags: 64, // Use flags instead of ephemeral
         });
 
         const message = await interaction.fetchReply();
@@ -51,18 +62,21 @@ module.exports = {
         collector.on('collect', async (gameInteraction) => {
             if (gameInteraction.customId === 'select_game') {
                 const selectedGame = gameInteraction.values[0];
-                const selectedGameLabel = games.find(game => game.value === selectedGame).label;
+                const selectedGameInfo = games.find(game => game.value === selectedGame);
 
                 const embed = new EmbedBuilder()
-                    .setTitle(`Selected Game: ${selectedGameLabel}`)
+                    .setTitle(`${selectedGameInfo.emoji} Selected Game: ${selectedGameInfo.label}`)
                     .setDescription('Now select a loader for the chosen game.')
-                    .setColor(0x00AE86);
+                    .setColor('#FF69B4')
+                    .setThumbnail('https://cdn.discordapp.com/attachments/1318252966515576943/1330188986160775240/bucac.gif')
+                    .setFooter({ text: '🎨 Developer: Hitori | Design: Arons' });
 
                 const loaders = loadersByGame[selectedGame] || [];
                 if (loaders.length === 0) {
                     await gameInteraction.update({
-                        content: `No loaders available for **${selectedGameLabel}**.`,
+                        content: `No loaders available for **${selectedGameInfo.label}**.`,
                         components: [],
+                        embeds: [embed]
                     });
                     return;
                 }
@@ -91,9 +105,16 @@ module.exports = {
 
                         const downloadLink = `https://arons.dev/loader/${selectedGame}/${selectedLoader}.zip`;
 
+                        const finalEmbed = new EmbedBuilder()
+                            .setTitle('✅ Download Ready!')
+                            .setDescription(`**Selected Game:** ${selectedGameInfo.emoji} ${selectedGameInfo.label}\n**Selected Loader:** ${selectedLoaderLabel}`)
+                            .addFields({ name: '🔗 Download Link', value: `[Click Here to Download](${downloadLink})` })
+                            .setColor('#00FF00')
+                            .setThumbnail('https://cdn.discordapp.com/attachments/1318252966515576943/1330188986160775240/bucac.gif')
+                            .setFooter({ text: '🎨 Developer: Hitori | Design: Arons' });
+
                         await loaderInteraction.update({
-                            content: `You selected **${selectedLoaderLabel}** for **${selectedGameLabel}**. Here is your download link: [Download Now](${downloadLink})`,
-                            embeds: [],
+                            embeds: [finalEmbed],
                             components: [],
                         });
                     }
@@ -103,8 +124,13 @@ module.exports = {
 
         collector.on('end', (collected, reason) => {
             if (reason === 'time') {
+                const timeoutEmbed = new EmbedBuilder()
+                    .setTitle('⏰ Time Out')
+                    .setDescription('Interaction timed out. Please use `/download` to try again.')
+                    .setColor('#FF0000');
+
                 interaction.editReply({
-                    content: 'Interaction timed out. Use `/download` to try again.',
+                    embeds: [timeoutEmbed],
                     components: [],
                 });
             }

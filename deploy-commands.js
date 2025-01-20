@@ -1,6 +1,7 @@
 const { REST, Routes } = require('discord.js');
 require('dotenv').config(); // Load .env file
 const fs = require('fs');
+const path = require('path');
 
 // Load environment variables from .env
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_IDS } = process.env;
@@ -15,39 +16,106 @@ if (!DISCORD_TOKEN || !CLIENT_ID || !GUILD_IDS) {
 // Split GUILD_IDS into an array and trim spaces
 const guildIds = GUILD_IDS.split(',').map(id => id.trim());
 
-// Read all commands from the "commands" folder
-const commands = [];
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
-
-for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  commands.push(command.data.toJSON());
+// Validate guild IDs
+if (guildIds.length === 0) {
+  console.error('No guild IDs provided. Please add guild IDs to GUILD_IDS in .env file.');
+  process.exit(1);
 }
+
+// Log the guild IDs being used
+console.log('Registering commands for the following guild IDs:');
+guildIds.forEach(id => console.log(`- ${id}`));
+
+// Function to read command files recursively from commands directory and its subdirectories
+const readCommandFiles = () => {
+  const commands = [];
+  
+  // Function to recursively read commands from directory
+  const readCommands = (dir) => {
+    const fullPath = path.join(__dirname, dir);
+    
+    if (!fs.existsSync(fullPath)) {
+      console.warn(`Directory "${fullPath}" does not exist, skipping...`);
+      return;
+    }
+
+    const items = fs.readdirSync(fullPath);
+
+    for (const item of items) {
+      const itemPath = path.join(fullPath, item);
+      const stat = fs.statSync(itemPath);
+
+      if (stat.isDirectory()) {
+        // If it's a directory, recursively read commands from it
+        readCommands(path.join(dir, item));
+      } else if (item.endsWith('.js')) {
+        // If it's a JS file, try to load it as a command
+        try {
+          const command = require(itemPath);
+          if (command && command.data && command.data.toJSON) {
+            commands.push(command.data.toJSON());
+          } else {
+            console.warn(`Skipping invalid command file: ${itemPath}`);
+          }
+        } catch (error) {
+          console.error(`Error loading command file ${itemPath}:`, error);
+        }
+      }
+    }
+  };
+
+  // Start reading from the commands directory
+  readCommands('./commands');
+
+  if (commands.length === 0) {
+    console.warn('No command files found in the commands directory or its subdirectories.');
+  }
+
+  return commands;
+};
+
+// Read commands from commands folder and its subdirectories
+const commands = readCommandFiles();
 
 // Create REST client to interact with Discord API
 const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
 
-// Register commands for each guild
+// Register commands for each guild ID
 (async () => {
   try {
-    console.log('Registering slash commands for guilds...');
+    console.log('Started refreshing application (/) commands for guilds...');
+
+    // Register commands for each guild
+    let successCount = 0;
+    let failCount = 0;
 
     for (const guildId of guildIds) {
-      // Validate that the guild ID is in the correct format
-      if (!/^\d{17,19}$/.test(guildId)) {
-        console.warn(`Invalid guild ID skipped: ${guildId}`);
-        continue;
+      try {
+        await rest.put(
+          Routes.applicationGuildCommands(CLIENT_ID, guildId),
+          { body: commands }
+        );
+        console.log(`✅ Successfully registered commands for guild ${guildId}`);
+        successCount++;
+      } catch (error) {
+        console.error(`❌ Failed to register commands for guild ${guildId}:`, error.message);
+        failCount++;
       }
-
-      await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, guildId),
-        { body: commands }
-      );
-      console.log(`Successfully registered commands for guild ID: ${guildId}`);
     }
 
-    console.log('All guilds have been updated successfully!');
+    console.log('\nRegistration Summary:');
+    console.log(`✅ Successfully registered commands in ${successCount} guilds`);
+    if (failCount > 0) {
+      console.log(`❌ Failed to register commands in ${failCount} guilds`);
+    }
   } catch (error) {
-    console.error('Error registering commands:', error);
+    if (error.code === 50001) {
+      console.error('Error: Bot lacks permissions. Make sure to:');
+      console.error('1. Use the correct bot token');
+      console.error('2. Enable "applications.commands" scope when inviting the bot');
+      console.error('3. The bot has proper permissions in the server');
+    } else {
+      console.error('Error registering commands:', error);
+    }
   }
 })();

@@ -118,7 +118,6 @@ module.exports = {
           .setStyle(ButtonStyle.Primary)
       );
 
-    let currentPage = 1;
     const pages = [page1, page2, page3, page4];
     
     const message = await interaction.reply({ 
@@ -127,21 +126,28 @@ module.exports = {
       fetchReply: true
     });
 
-    const collector = message.createMessageComponentCollector({ time: 60000 });
+    // Store user-specific page numbers
+    const userPages = new Map();
+
+    const collector = message.createMessageComponentCollector();
 
     collector.on('collect', async i => {
-      if (i.customId === 'previous') {
-        currentPage = currentPage > 1 ? currentPage - 1 : pages.length;
-        await i.update({ embeds: [pages[currentPage - 1]], components: [row] });
-      } else if (i.customId === 'next') {
-        currentPage = currentPage < pages.length ? currentPage + 1 : 1;
-        await i.update({ embeds: [pages[currentPage - 1]], components: [row] });
-      }
-    });
+      // Get current page for this specific user
+      let userCurrentPage = userPages.get(i.user.id) || 1;
 
-    collector.on('end', () => {
-      row.components.forEach(button => button.setDisabled(true));
-      message.edit({ components: [row] }).catch(console.error);
+      if (i.customId === 'previous') {
+        userCurrentPage = userCurrentPage > 1 ? userCurrentPage - 1 : pages.length;
+      } else if (i.customId === 'next') {
+        userCurrentPage = userCurrentPage < pages.length ? userCurrentPage + 1 : 1;
+      }
+
+      // Store the new page number for this user
+      userPages.set(i.user.id, userCurrentPage);
+
+      await i.update({ 
+        embeds: [pages[userCurrentPage - 1]], 
+        components: [row]
+      });
     });
   },
 };

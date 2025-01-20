@@ -41,6 +41,13 @@ module.exports = {
             
             const userId = message.author.id;
             const messageContent = message.content.trim();
+            const member = message.guild.members.cache.get(message.author.id);
+            const bypassRoleIds = process.env.WHITELIST_ROLE_ID?.split(',') || [];
+
+            // Check if user has bypass role
+            if (member && member.roles.cache.some(role => bypassRoleIds.includes(role.id))) {
+                return;
+            }
 
             if (!messageCache.has(userId)) {
                 messageCache.set(userId, []);
@@ -54,7 +61,6 @@ module.exports = {
 
             const messageCount = recentMessages.filter(msg => msg.content === messageContent).length;
 
-            const member = message.guild.members.cache.get(message.author.id);
             if (messageCount >= spamThreshold) {
                 if (member) {
                     const spamEmbed = new EmbedBuilder()
@@ -80,9 +86,8 @@ module.exports = {
                 'discord-nitro', 'free-robux'
             ];
             
-            const bypassRoleIds = process.env.BYPASS_ROLE_ID.split(',');
             if (scamLinks.some(link => message.content.toLowerCase().includes(link))) {
-                if (member && !member.roles.cache.some(role => bypassRoleIds.includes(role.id))) {
+                if (member) {
                     const scamEmbed = new EmbedBuilder()
                         .setColor('#FF0000')
                         .setTitle('🚨 Scam Link Detected')
@@ -95,6 +100,10 @@ module.exports = {
                         .setImage('https://i.imgur.com/mE6LxHj.gif')
                         .setTimestamp();
 
+                    // Delete the scam message first
+                    await message.delete().catch(console.error);
+                    
+                    // Then kick the member
                     await member.kick('Anti-Scam System').catch(console.error);
                     message.channel.send({ embeds: [scamEmbed] });
                 }

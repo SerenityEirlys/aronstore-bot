@@ -4,78 +4,121 @@ const path = require('path');
 const replies = require('./data/replies.js');
 require('dotenv').config();
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({ 
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ]
+});
 
 client.commands = new Collection();
 
-// Load lệnh từ thư mục commands
+// Load commands from commands directory
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
-    if (!command.data || !command.execute) {
-        console.warn(`Tệp lệnh ${file} không hợp lệ! Bỏ qua.`);
-        continue;
-    }
-    client.commands.set(command.data.name, command);
+    // Hỗ trợ cả command slash và command thường
+    const commandName = command.data ? command.data.name : command.name;
+    client.commands.set(commandName, command);
 }
 
-// Event kích hoạt khi bot sẵn sàng
+// Ready event handler
 client.once('ready', () => {
-    console.log(`Bot đã hoạt động: ${client.user.tag}`);
+    console.log(`Bot is online: ${client.user.tag}`);
 
-    // Đặt trạng thái cho bot
+    // Set bot status
     client.user.setPresence({
-        activities: [{ name: 'arons.dev', type: 'PLAYING' }], // type có thể là PLAYING, LISTENING, WATCHING
-        status: 'dnd', // Các trạng thái: online, idle, dnd, invisible
+        activities: [{ 
+            name: 'arons.dev', 
+            type: 0
+        }],
+        status: 'dnd'
     });
 });
 
-// Lưu trữ thời gian reply cuối cùng cho mỗi kênh
-const lastReplyTimes = new Map();
-
-// Event xử lý tin nhắn văn bản
+// Message handler
 client.on('messageCreate', async (message) => {
-    // Bỏ qua tin nhắn từ bot
     if (message.author.bot) return;
+    
+    // Chỉ trả lời trong server có ID 1104940962804936856
+    if (message.guild.id !== '1104940962804936856') return;
 
-    const channelId = message.channel.id;
-    const now = Date.now();
-    const lastReplyTime = lastReplyTimes.get(channelId) || 0;
-
-    // Kiểm tra xem đã đủ 5 giây kể từ lần reply cuối chưa
-    if (now - lastReplyTime < 5000) return;
-
-    // Kiểm tra tin nhắn có chứa từ khóa trong replies không
     const messageContent = message.content.toLowerCase();
     for (const [keyword, responses] of Object.entries(replies)) {
         if (messageContent.includes(keyword)) {
-            // Chọn ngẫu nhiên một câu trả lời từ mảng responses
             const randomResponse = responses[Math.floor(Math.random() * responses.length)];
             await message.reply(randomResponse);
-            lastReplyTimes.set(channelId, now); // Cập nhật thời gian reply cuối
-            break; // Thoát vòng lặp sau khi đã trả lời
+            break;
         }
     }
 });
 
-// Event xử lý lệnh Slash
+// Slash command handler
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
 
-    if (!command) return;
+    if (!command) {
+        await interaction.reply({ content: 'Command not found!', flags: ['Ephemeral'] });
+        return;
+    }
 
     try {
         await command.execute(interaction);
     } catch (error) {
-        console.error(error);
-        await interaction.reply({ content: 'Có lỗi xảy ra khi thực thi lệnh!', ephemeral: true });
+        console.error('Error executing command:', error);
+        if (error.code === 50001) {
+            const missingAccessMessage = 'Error: Bot lacks permissions. Please make sure:\n' +
+                '1. The bot has proper permissions in the server\n' + 
+                '2. The "applications.commands" scope is enabled\n' +
+                '3. You are using the correct bot token';
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: missingAccessMessage, flags: ['Ephemeral'] });
+            } else {
+                await interaction.reply({ content: missingAccessMessage, flags: ['Ephemeral'] });
+            }
+        } else {
+            const errorMessage = 'An error occurred while executing the command. Please try again later.';
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: errorMessage, flags: ['Ephemeral'] });
+            } else {
+                await interaction.reply({ content: errorMessage, flags: ['Ephemeral'] });
+            }
+        }
     }
 });
 
-// Đăng nhập bot
-client.login(process.env.DISCORD_TOKEN);
+// Server join handler
+client.on('guildCreate', (guild) => {
+    if (guild.id !== process.env.SERVER_ID_PING) {
+        guild.leave()
+            .then(() => console.log(`Đã rời khỏi server không được phép: ${guild.name}`))
+            .catch(console.error);
+    }
+});
+
+// Validate environment variables
+if (!process.env.DISCORD_TOKEN || !process.env.SERVER_ID_PING || !process.env.USER_ID) {
+    console.error('Missing required environment variables!');
+    process.exit(1);
+}
+
+// Login with error handling
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+    if (error.code === 50001) {
+        console.error('Error: Bot lacks permissions. Make sure to:');
+        console.error('1. Use the correct bot token');
+        console.error('2. Enable "applications.commands" scope when inviting the bot');
+        console.error('3. The bot has proper permissions in the server');
+    } else {
+        console.error('Failed to login:', error);
+        console.error('Please check if your token is valid and the bot has proper permissions');
+    }
+    process.exit(1);
+});

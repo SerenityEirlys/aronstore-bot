@@ -14,13 +14,16 @@ module.exports = {
         .setRequired(false)),
 
   async execute(interaction) {
+    // Defer the reply immediately
+    await interaction.deferReply({ ephemeral: true });
+
     if (!interaction.member.permissions.has('ADMINISTRATOR')) {
       const noPermEmbed = new EmbedBuilder()
         .setColor('#FF0000')
         .setTitle('⛔ Insufficient Permissions')
         .setDescription('You need ADMINISTRATOR permission to use this command.')
         .setTimestamp();
-      return interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
+      return interaction.editReply({ embeds: [noPermEmbed] });
     }
 
     const message = interaction.options.getString('message').replace(/\\n/g, '\n');
@@ -30,9 +33,8 @@ module.exports = {
     if (attachment) {
       const validImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
       if (!validImageTypes.includes(attachment.contentType)) {
-        return interaction.reply({ 
-          content: '❌ The attached file must be an image (JPEG, PNG, or GIF).',
-          ephemeral: true 
+        return interaction.editReply({ 
+          content: '❌ The attached file must be an image (JPEG, PNG, or GIF).'
         });
       }
     }
@@ -56,15 +58,13 @@ module.exports = {
 
     try {
       await interaction.channel.send({ content: '@everyone', embeds: [embed] });
-      await interaction.reply({ 
-        content: '✅ Announcement sent successfully!', 
-        ephemeral: true 
+      await interaction.editReply({ 
+        content: '✅ Announcement sent successfully!'
       });
     } catch (error) {
       console.error(error);
-      await interaction.reply({
-        content: '❌ Failed to send announcement. Please try again.',
-        ephemeral: true
+      await interaction.editReply({
+        content: '❌ Failed to send announcement. Please try again.'
       });
     }
   },
