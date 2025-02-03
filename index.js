@@ -1,13 +1,14 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const {Client, GatewayIntentBits, Collection} = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const replies = require('./data/replies.js');
+const {removeVietnameseAccents} = require("./utils/utils");
 require('dotenv').config();
 
-const client = new Client({ 
+const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers
     ]
@@ -33,8 +34,8 @@ client.once('ready', () => {
 
     // Set bot status
     client.user.setPresence({
-        activities: [{ 
-            name: 'arons.dev', 
+        activities: [{
+            name: 'arons.dev',
             type: 0
         }],
         status: 'dnd'
@@ -44,11 +45,15 @@ client.once('ready', () => {
 // Message handler
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    
+
     // Chỉ trả lời trong server có ID 1104940962804936856
     if (message.guild.id !== '1104940962804936856') return;
 
-    const messageContent = message.content.toLowerCase();
+    const messageContent = removeVietnameseAccents(message.content.toLowerCase());
+    console.log(`Handle message:
+    - Author: ${message.author}
+    - Original message: ${message.content}
+    - Handling message: ${messageContent}`);
     for (const [keyword, responses] of Object.entries(replies)) {
         if (messageContent.includes(keyword)) {
             const randomResponse = responses[Math.floor(Math.random() * responses.length)];
@@ -65,7 +70,7 @@ client.on('interactionCreate', async (interaction) => {
     const command = client.commands.get(interaction.commandName);
 
     if (!command) {
-        await interaction.reply({ content: 'Command not found!', flags: ['Ephemeral'] });
+        await interaction.reply({content: 'Command not found!', flags: ['Ephemeral']});
         return;
     }
 
@@ -75,20 +80,20 @@ client.on('interactionCreate', async (interaction) => {
         console.error('Error executing command:', error);
         if (error.code === 50001) {
             const missingAccessMessage = 'Error: Bot lacks permissions. Please make sure:\n' +
-                '1. The bot has proper permissions in the server\n' + 
+                '1. The bot has proper permissions in the server\n' +
                 '2. The "applications.commands" scope is enabled\n' +
                 '3. You are using the correct bot token';
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: missingAccessMessage, flags: ['Ephemeral'] });
+                await interaction.followUp({content: missingAccessMessage, flags: ['Ephemeral']});
             } else {
-                await interaction.reply({ content: missingAccessMessage, flags: ['Ephemeral'] });
+                await interaction.reply({content: missingAccessMessage, flags: ['Ephemeral']});
             }
         } else {
             const errorMessage = 'An error occurred while executing the command. Please try again later.';
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: errorMessage, flags: ['Ephemeral'] });
+                await interaction.followUp({content: errorMessage, flags: ['Ephemeral']});
             } else {
-                await interaction.reply({ content: errorMessage, flags: ['Ephemeral'] });
+                await interaction.reply({content: errorMessage, flags: ['Ephemeral']});
             }
         }
     }
@@ -112,13 +117,13 @@ if (!process.env.DISCORD_TOKEN || !process.env.SERVER_ID_PING || !process.env.US
 // Login with error handling
 client.login(process.env.DISCORD_TOKEN).catch(error => {
     if (error.code === 50001) {
-        console.error('Error: Bot lacks permissions. Make sure to:');
-        console.error('1. Use the correct bot token');
-        console.error('2. Enable "applications.commands" scope when inviting the bot');
-        console.error('3. The bot has proper permissions in the server');
+        console.error(`Error: Bot lacks permissions. Make sure to:
+    1. Use the correct bot token
+    2. Enable "applications.commands" scope when inviting the bot
+    3. The bot has proper permissions in the server`);
     } else {
-        console.error('Failed to login:', error);
-        console.error('Please check if your token is valid and the bot has proper permissions');
+        console.error(`Failed to login: ${error}
+Please check if your token is valid and the bot has proper permissions`);
     }
     process.exit(1);
 });
